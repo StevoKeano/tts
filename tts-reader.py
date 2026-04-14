@@ -19,32 +19,35 @@ client = TelegramClient('reader', api_id, api_hash)
 
 # Optional: Only react to messages from this bot (or remove filter for all)
 BOT_USERNAME = 'StevoKeano_bot'  # or 'username' without @
-
+pending = {}
 @client.on(events.NewMessage(from_users=BOT_USERNAME))
+@client.on(events.MessageEdited(from_users=BOT_USERNAME))
 async def handler(event):
-    text = event.raw_text.strip()
+    msg_id = event.message.id
+    text = clean_for_tts(event.raw_text.strip())
     if not text:
-        return  # Skip empty
+        return
 
-    print(f"New message from @{BOT_USERNAME}: {text}")
+    if msg_id in pending:
+        pending[msg_id].cancel()
 
-    # Speak aloud using Termux-API TTS (native Android engine)
-    # Speak aloud using music stream (reliable in background)
-    try:
-      print(f"TEXT_LENGTH={len(text)} TEXT_REPR={repr(text[:50])}")
-      subprocess.run(['termux-tts-speak', '-s', 'music', '-l', 'en', '-n', 'GB', '-r', '1.0', clean_for_tts(text)], check=True)
-#      subprocess.run(['termux-tts-speak', '-s', 'music', '-l', 'en', '-n', 'GB', '-r', '1.0', text], check=True)
-#      subprocess.run(['termux-toast', '-s', 'short', f"Spoken: {text}"])
-      print("✅ Spoken via MUSIC stream (GB)")
-    except Exception as e:
-        print(f"TTS failed: {e}")
-        # Reliable fallback (always works)
-        from gtts import gTTS
-        tts = gTTS(text=text, lang='en', slow=False)
-        tts.save("/sdcard/Download/temp_message.mp3")
-        subprocess.run(['termux-media-player', 'play', '/sdcard/Download/temp_message.mp3'])
-        print("✅ Spoken via gTTS fallback")
+    async def speak_after_delay():
+        await asyncio.sleep(3)
+        print(f"New message from @{BOT_USERNAME}: {text}")
+        print(f"TEXT_LENGTH={len(text)}")
+        with open('/sdcard/Download/tts_input.txt', 'w') as f:
+            f.write(text)
+        try:
+#            subprocess.run(['termux-tts-speak', '-s', 'music', '-l', 'en', '-n', 'GB', '-r', '1.0', '-f', '/sdcard/Download/tts_input.txt'], check=True)
+            subprocess.run(['termux-tts-speak', '-s', 'music', '-l', 'en', '-n', 'GB', '-r', '1.0', text], check=True)
+            subprocess.run(['termux-toast', '-s', 'short', f"Spoken: {text[:30]}"])
+            print("✅ Spoken via MUSIC stream (GB)")
+        except Exception as e:
+            print(f"TTS failed: {e}")
+        if msg_id in pending:
+            del pending[msg_id]
 
+    pending[msg_id] = asyncio.ensure_future(speak_after_delay())
 async def main():
     print("Listening for messages from @StevoKeano_bot... Ctrl+C to stop")
     await client.run_until_disconnected()
