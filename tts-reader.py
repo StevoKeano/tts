@@ -2,6 +2,15 @@ from telethon import TelegramClient, events
 import subprocess  # For Termux-API TTS call
 import asyncio
 import os
+import re
+
+def clean_for_tts(text):
+    text = re.sub(r'\*+', '', text)        # bold/italic
+    text = re.sub(r'`+', '', text)         # code ticks
+    text = re.sub(r'#+\s*', '', text)      # headers
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)  # links
+    text = re.sub(r'[-*•]\s+', '', text)   # bullets
+    return text.strip()
 
 api_id = int(os.environ['api_id'])      # integer from my.telegram.org
 api_hash = os.environ['api_hash']
@@ -22,7 +31,9 @@ async def handler(event):
     # Speak aloud using Termux-API TTS (native Android engine)
     # Speak aloud using music stream (reliable in background)
     try:
-      subprocess.run(['termux-tts-speak', '-s', 'music', '-l', 'en', '-n', 'GB', '-r', '1.0', text], check=True)
+      print(f"TEXT_LENGTH={len(text)} TEXT_REPR={repr(text[:50])}")
+      subprocess.run(['termux-tts-speak', '-s', 'music', '-l', 'en', '-n', 'GB', '-r', '1.0', clean_for_tts(text)], check=True)
+#      subprocess.run(['termux-tts-speak', '-s', 'music', '-l', 'en', '-n', 'GB', '-r', '1.0', text], check=True)
 #      subprocess.run(['termux-toast', '-s', 'short', f"Spoken: {text}"])
       print("✅ Spoken via MUSIC stream (GB)")
     except Exception as e:
